@@ -7,6 +7,11 @@ keywords = ["sims1", "far"]
 description = "A library to parse The Sims 1 .far files."
 repository = "https://github.com/FaithBeam/sims-far"
 readme = "README.md"
+exclude = [
+    "test.far",
+    ".vscode/*",
+    ".idea/*"
+]
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
