@@ -4,7 +4,7 @@ A Rust library to extract data from The Sims 1 UIGraphics.far files.
 
 ## Installation
 
-`cargo install sims-far`
+`cargo add sims-far`
 
 ## Usage
 
