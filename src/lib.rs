@@ -1,9 +1,26 @@
 #![crate_name = "sims_far"]
 
+use std::convert::Infallible;
 use std::fs::File;
+use std::io;
 use std::io::SeekFrom::Start;
 use std::io::{Read, Seek};
-use std::str::from_utf8;
+use std::str::{from_utf8, Utf8Error};
+use thiserror::Error;
+
+#[derive(Error, Debug)]
+pub enum FarError {
+    #[error("Failed to parse Far.")]
+    FailedToParseFar,
+    #[error("Failed to parse manifest entry.")]
+    FailedToParseManifestEntry,
+    #[error("File error")]
+    FileError(#[from] io::Error),
+    #[error("utf8 error")]
+    Utf8Error(#[from] Utf8Error),
+    #[error("infallible error")]
+    InfallibleError(#[from] Infallible),
+}
 
 /// The FAR format (.far files) are used to bundle (archive) multiple files together. All numeric
 /// values in the header and manifest are stored in little-endian order(least significant byte
@@ -28,7 +45,7 @@ pub struct Far {
 
 impl Far {
     /// Create a new instance of Far and parse it
-    pub fn new(path: &str) -> Far {
+    pub fn new(path: &str) -> Result<Far, FarError> {
         return parse_far(path);
     }
 }
@@ -66,16 +83,16 @@ pub struct ManifestEntry {
 }
 
 impl ManifestEntry {
-    pub fn get_bytes(&self) -> Vec<u8> {
-        let mut f = File::open(self.file_path.as_str()).unwrap();
+    pub fn get_bytes(&self) -> Result<Vec<u8>, FarError> {
+        let mut f = File::open(self.file_path.as_str())?;
         let mut buf: Vec<u8> = vec![0x00; self.file_length1 as usize];
-        f.seek(Start(self.file_offset as u64)).unwrap();
-        f.read_exact(&mut *buf).unwrap();
-        return buf;
+        f.seek(Start(self.file_offset as u64))?;
+        f.read_exact(&mut *buf)?;
+        return Ok(buf);
     }
 }
 
-fn parse_far(path: &str) -> Far {
+fn parse_far(path: &str) -> Result<Far, FarError> {
     let mut far = Far {
         signature: "".to_string(),
         version: 0,
@@ -86,38 +103,37 @@ fn parse_far(path: &str) -> Far {
         },
     };
 
-    let mut f = File::open(path).unwrap();
+    let mut f = File::open(path)?;
 
     // read signature
     let mut buf: [u8; 8] = [0x00; 8];
-    f.read_exact(&mut buf).unwrap();
-    far.signature = from_utf8(&buf).unwrap().to_string();
+    f.read_exact(&mut buf)?;
+    far.signature = from_utf8(&buf)?.to_string();
 
     // read version
     let mut buf: [u8; 4] = [0x00; 4];
-    f.read_exact(&mut buf).unwrap();
-    far.version = u32::from_le_bytes(buf.try_into().unwrap());
+    f.read_exact(&mut buf)?;
+    far.version = u32::from_le_bytes(buf.try_into()?);
 
     // read manifest offset
-    f.read_exact(&mut buf).unwrap();
-    far.manifest_offset = u32::from_le_bytes(buf.try_into().unwrap());
+    f.read_exact(&mut buf)?;
+    far.manifest_offset = u32::from_le_bytes(buf.try_into()?);
 
     // read manifest
-    f.seek(Start(far.manifest_offset as u64)).unwrap();
-    f.read_exact(&mut buf).unwrap();
-    far.manifest.number_of_files = u32::from_le_bytes(buf.try_into().unwrap());
+    f.seek(Start(far.manifest_offset as u64))?;
+    f.read_exact(&mut buf)?;
+    far.manifest.number_of_files = u32::from_le_bytes(buf.try_into()?);
 
     // read manifest entries
     for _ in 0..far.manifest.number_of_files {
-        far.manifest
-            .manifest_entries
-            .push(parse_manifest_entry(&mut f, path));
+        let me = parse_manifest_entry(&mut f, path)?;
+        far.manifest.manifest_entries.push(me);
     }
 
-    return far;
+    return Ok(far);
 }
 
-fn parse_manifest_entry(f: &mut File, uigraphics_path: &str) -> ManifestEntry {
+fn parse_manifest_entry(f: &mut File, uigraphics_path: &str) -> Result<ManifestEntry, FarError> {
     let mut me = ManifestEntry {
         file_path: uigraphics_path.to_string(),
         file_length1: 0,
@@ -129,27 +145,27 @@ fn parse_manifest_entry(f: &mut File, uigraphics_path: &str) -> ManifestEntry {
     let mut buf: [u8; 4] = [0x00; 4];
 
     // read file length 1
-    f.read_exact(&mut buf).unwrap();
-    me.file_length1 = u32::from_le_bytes(buf.try_into().unwrap());
+    f.read_exact(&mut buf)?;
+    me.file_length1 = u32::from_le_bytes(buf.try_into()?);
 
     // read file length 2
-    f.read_exact(&mut buf).unwrap();
-    me.file_length2 = u32::from_le_bytes(buf.try_into().unwrap());
+    f.read_exact(&mut buf)?;
+    me.file_length2 = u32::from_le_bytes(buf.try_into()?);
 
     // read file offset
-    f.read_exact(&mut buf).unwrap();
-    me.file_offset = u32::from_le_bytes(buf.try_into().unwrap());
+    f.read_exact(&mut buf)?;
+    me.file_offset = u32::from_le_bytes(buf.try_into()?);
 
     // read file name length
-    f.read_exact(&mut buf).unwrap();
-    me.file_name_length = u32::from_le_bytes(buf.try_into().unwrap());
+    f.read_exact(&mut buf)?;
+    me.file_name_length = u32::from_le_bytes(buf.try_into()?);
 
     // read file name
     let mut buf: Vec<u8> = vec![0x00; me.file_name_length as usize];
-    f.read_exact(&mut buf).unwrap();
-    me.file_name = from_utf8(&buf).unwrap().to_string();
+    f.read_exact(&mut buf)?;
+    me.file_name = from_utf8(&buf)?.to_string();
 
-    return me;
+    return Ok(me);
 }
 
 #[cfg(test)]
@@ -159,7 +175,7 @@ mod tests {
     #[test]
     fn test_new() {
         let path = r"test.far";
-        let far = Far::new(path);
+        let far = Far::new(path).unwrap();
         assert_eq!(far.signature, "FAR!byAZ");
         assert_eq!(far.version, 1);
         assert_eq!(far.manifest_offset, 160);
@@ -174,7 +190,13 @@ mod tests {
     #[test]
     fn test_get_bytes() {
         let path = r"test.far";
-        let far = Far::new(path);
-        assert_eq!(far.manifest.manifest_entries[0].get_bytes().len(), 144);
+        let far = Far::new(path).unwrap();
+        assert_eq!(
+            far.manifest.manifest_entries[0]
+                .get_bytes()
+                .expect("bad")
+                .len(),
+            144
+        );
     }
 }

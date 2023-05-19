@@ -1,6 +1,6 @@
 [package]
 name = "sims-far"
-version = "1.0.0"
+version = "1.1.0"
 edition = "2021"
 license = "MIT"
 keywords = ["sims1", "far"]
@@ -16,3 +16,4 @@ exclude = [
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
+thiserror = "1.0.40"
