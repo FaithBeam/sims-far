@@ -25,10 +25,11 @@ pub enum FarError {
 /// The FAR format (.far files) are used to bundle (archive) multiple files together. All numeric
 /// values in the header and manifest are stored in little-endian order(least significant byte
 /// first).
-pub struct Far {
+#[derive(Clone)]
+pub struct Far<'a> {
     /// The signature is an eight-byte string, consisting literally of "FAR!byAZ" (without the
     /// quotes).
-    pub signature: String,
+    pub signature: &'a str,
     /// The version is always one.
     pub version: u32,
     /// The manifest offset is the byte offset from the beginning of the file to the manifest.
@@ -40,10 +41,10 @@ pub struct Far {
     /// The manifest contains a count of the number of archived files, followed by an entry for
     /// each file. In all of the examples examined the order of the entries matches the order of
     /// the archived files, but whether this is a firm requirement or not is unknown.
-    pub manifest: Manifest,
+    pub manifest: Manifest<'a>,
 }
 
-impl Far {
+impl Far<'_> {
     /// Create a new instance of Far and parse it
     pub fn new(path: &str) -> Result<Far, FarError> {
         return parse_far(path);
@@ -53,17 +54,19 @@ impl Far {
 /// The manifest contains a count of the number of archived files, followed by an entry for each
 /// file. In all of the examples examined the order of the entries matches the order of the archived
 /// files, but whether this is a firm requirement or not is unknown.
-pub struct Manifest {
+#[derive(Clone)]
+pub struct Manifest<'a> {
     /// The number of files in the far file.
     pub number_of_files: u32,
     /// A list of Manifest Entries in the far file.
-    pub manifest_entries: Vec<ManifestEntry>,
+    pub manifest_entries: Vec<ManifestEntry<'a>>,
 }
 
 /// A manifest entry containing the first file length, second file length, file offset, file name
 /// length, and file name.
-pub struct ManifestEntry {
-    file_path: String,
+#[derive(Clone, Copy)]
+pub struct ManifestEntry<'a> {
+    file_path: &'a str,
     /// The file length is stored twice. Perhaps this is because some variant of FAR files supports
     /// compressed data and the fields would hold the compressed and uncompressed sizes, but this is
     /// pure speculation. The safest thing to do is to leave the fields identical.
@@ -79,12 +82,12 @@ pub struct ManifestEntry {
     /// the entry would be nineteen bytes long in total.
     pub file_name_length: u32,
     /// The name of the file. This can include directories.
-    pub file_name: String,
+    pub file_name: &'a str,
 }
 
-impl ManifestEntry {
+impl ManifestEntry<'_> {
     pub fn get_bytes(&self) -> Result<Vec<u8>, FarError> {
-        let mut f = File::open(self.file_path.as_str())?;
+        let mut f = File::open(self.file_path)?;
         let mut buf: Vec<u8> = vec![0x00; self.file_length1 as usize];
         f.seek(Start(self.file_offset as u64))?;
         f.read_exact(&mut *buf)?;
@@ -94,7 +97,7 @@ impl ManifestEntry {
 
 fn parse_far(path: &str) -> Result<Far, FarError> {
     let mut far = Far {
-        signature: "".to_string(),
+        signature: "",
         version: 0,
         manifest_offset: 0,
         manifest: Manifest {
@@ -108,7 +111,7 @@ fn parse_far(path: &str) -> Result<Far, FarError> {
     // read signature
     let mut buf: [u8; 8] = [0x00; 8];
     f.read_exact(&mut buf)?;
-    far.signature = from_utf8(&buf)?.to_string();
+    far.signature = from_utf8(&buf)?;
 
     // read version
     let mut buf: [u8; 4] = [0x00; 4];
@@ -133,14 +136,17 @@ fn parse_far(path: &str) -> Result<Far, FarError> {
     return Ok(far);
 }
 
-fn parse_manifest_entry(f: &mut File, uigraphics_path: &str) -> Result<ManifestEntry, FarError> {
+fn parse_manifest_entry<'a>(
+    f: &mut File,
+    uigraphics_path: &str,
+) -> Result<ManifestEntry<'a>, FarError> {
     let mut me = ManifestEntry {
-        file_path: uigraphics_path.to_string(),
+        file_path: uigraphics_path,
         file_length1: 0,
         file_length2: 0,
         file_offset: 0,
         file_name_length: 0,
-        file_name: "".to_string(),
+        file_name: "",
     };
     let mut buf: [u8; 4] = [0x00; 4];
 
@@ -163,7 +169,7 @@ fn parse_manifest_entry(f: &mut File, uigraphics_path: &str) -> Result<ManifestE
     // read file name
     let mut buf: Vec<u8> = vec![0x00; me.file_name_length as usize];
     f.read_exact(&mut buf)?;
-    me.file_name = from_utf8(&buf)?.to_string();
+    me.file_name = from_utf8(&buf)?;
 
     return Ok(me);
 }
