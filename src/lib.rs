@@ -10,15 +10,11 @@ use thiserror::Error;
 
 #[derive(Error, Debug)]
 pub enum FarError {
-    #[error("Failed to parse Far.")]
-    FailedToParseFar,
-    #[error("Failed to parse manifest entry.")]
-    FailedToParseManifestEntry,
-    #[error("File error")]
+    #[error("File error: {0}")]
     FileError(#[from] io::Error),
-    #[error("utf8 error")]
+    #[error("utf8 error: {0}")]
     Utf8Error(#[from] Utf8Error),
-    #[error("infallible error")]
+    #[error("infallible error: {0}")]
     InfallibleError(#[from] Infallible),
 }
 
