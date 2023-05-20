@@ -25,6 +25,7 @@ pub enum FarError {
 /// The FAR format (.far files) are used to bundle (archive) multiple files together. All numeric
 /// values in the header and manifest are stored in little-endian order(least significant byte
 /// first).
+#[derive(Clone)]
 pub struct Far {
     /// The signature is an eight-byte string, consisting literally of "FAR!byAZ" (without the
     /// quotes).
@@ -53,6 +54,7 @@ impl Far {
 /// The manifest contains a count of the number of archived files, followed by an entry for each
 /// file. In all of the examples examined the order of the entries matches the order of the archived
 /// files, but whether this is a firm requirement or not is unknown.
+#[derive(Clone)]
 pub struct Manifest {
     /// The number of files in the far file.
     pub number_of_files: u32,
@@ -62,6 +64,7 @@ pub struct Manifest {
 
 /// A manifest entry containing the first file length, second file length, file offset, file name
 /// length, and file name.
+#[derive(Clone)]
 pub struct ManifestEntry {
     file_path: String,
     /// The file length is stored twice. Perhaps this is because some variant of FAR files supports
